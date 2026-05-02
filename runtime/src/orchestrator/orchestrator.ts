@@ -261,7 +261,7 @@ export class Orchestrator {
           const role = task.assignedRole ? this.roles.get(task.assignedRole) : null;
           const roleContext = role
             ? `You are playing the role of "${role.name}" — ${role.description}.`
-            : 'You are a specialized agent.';
+            : 'You are a work assistant.';
 
           const systemPrompt = `${roleContext} Your task: ${task.description}. Be concise and focused.`;
 

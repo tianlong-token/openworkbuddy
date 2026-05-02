@@ -343,19 +343,18 @@ export const agentExecutor: ToolExecutor = async (args: Record<string, unknown>)
 
   if (!prompt) return { success: false, output: '', error: 'Missing prompt' };
 
-  if (!_runtimeRef || !_runtimeRef.getAgentLoop()) {
+  if (!_runtimeRef || !_runtimeRef.getLLMProvider()) {
     return { success: false, output: '', error: 'Agent tool requires LLM configuration.' };
   }
 
   // 构建子代理的系统提示
-  const systemPrompt = `You are a specialized sub-agent of type '${subagentType}'. Your task is: ${prompt}. Provide a concise, focused response.`;
-  const userMessage = `Execute the following task: ${prompt}`;
+  const systemPrompt = `You are a work assistant sub-agent. Complete your task using the tools available. Be concise and focused.\n\nTask: ${prompt}`;
+  const userMessage = prompt;
 
   try {
-    const agentLoop = _runtimeRef.getAgentLoop();
-    agentLoop.reset();
-
-    const result = await agentLoop.run(systemPrompt, userMessage);
+    // 创建独立的子 AgentLoop，不污染主对话历史
+    const subLoop = _runtimeRef.createSubAgentLoop(maxTurns);
+    const result = await subLoop.run(systemPrompt, userMessage);
 
     return {
       success: result.success,
@@ -388,7 +387,7 @@ export const skillExecutor: ToolExecutor = async (args: Record<string, unknown>)
     return { success: false, output: '', error: `Skill '${name}' not found. Available: ${available}` };
   }
 
-  if (!_runtimeRef.getAgentLoop()) {
+  if (!_runtimeRef.getLLMProvider()) {
     return {
       success: false,
       output: '',
@@ -397,8 +396,37 @@ export const skillExecutor: ToolExecutor = async (args: Record<string, unknown>)
   }
 
   try {
-    const output = await _runtimeRef.runSkill(name, message);
-    return { success: true, output: `[Skill '${name}' result]\n\n${output}` };
+    // 构建技能的系统提示（与 WorkBuddyRuntime.buildSystemPrompt 逻辑一致）
+    const config = _runtimeRef.getConfig();
+    const toolsStr = skill.frontmatter['allowed-tools'] as string | undefined;
+    const allowedTools = toolsStr
+      ? toolsStr.split(',').map(s => s.trim())
+      : config.allowedTools;
+
+    const toolRouter = _runtimeRef.getToolRouter();
+    const toolDescriptions = allowedTools.map((name: string) => {
+      const schema = toolRouter.getSchema(name as any);
+      return schema ? `- **${name}**: ${schema.description}` : `- ${name}`;
+    }).join('\n');
+
+    const prefix = `You are a work assistant. You exist to help people get their work done efficiently. You are skilled at using various tools and should use them proactively.`;
+    const toolSection = `## Available Tools\n${toolDescriptions}\n\nCall these tools when needed. Do not ask for permission — just use them.`;
+    const systemPrompt = `${prefix}\n\n## Instructions\n${skill.body}\n\n${toolSection}`;
+
+    // 创建独立的子 AgentLoop，不污染主对话历史
+    const subLoop = _runtimeRef.createSubAgentLoop(8);
+    const userMsg = message || `Execute skill '${name}'.`;
+
+    // 带超时运行
+    const timeoutMs = config.timeout || 60_000;
+    const result = await Promise.race([
+      subLoop.run(systemPrompt, userMsg),
+      new Promise<any>((_, reject) =>
+        setTimeout(() => reject(new Error(`Skill execution timed out after ${timeoutMs}ms`)), timeoutMs)
+      ),
+    ]);
+
+    return { success: true, output: `[Skill '${name}' result]\n\n${result.output}` };
   } catch (e: any) {
     return { success: false, output: '', error: `Failed to execute skill '${name}': ${e.message}` };
   }
@@ -520,24 +548,21 @@ export const taskExecutor: ToolExecutor = async (args: Record<string, unknown>):
     return executeTaskDag(taskGraph, timeoutMs);
   }
 
-  if (!_runtimeRef || !_runtimeRef.getAgentLoop) {
+  if (!_runtimeRef || !_runtimeRef.getLLMProvider()) {
     return { success: false, output: '', error: 'Task tool requires LLM configuration.' };
   }
 
-  const agentLoop = _runtimeRef.getAgentLoop();
-  if (!agentLoop) {
-    return { success: false, output: '', error: 'Task tool requires LLM configuration.' };
-  }
-
-  const systemPrompt = `You are a specialized ${subagentType} sub-agent. Your task is: ${description}. Follow the instructions below carefully.`;
+  const systemPrompt = `You are a work assistant sub-agent. Complete your task thoroughly using the tools available.\n\nTask: ${description}`;
 
   const timeout = new Promise<never>((_, reject) => {
     setTimeout(() => reject(new Error(`Task timed out after ${timeoutMs}ms`)), timeoutMs);
   });
 
   try {
+    // 创建独立的子 AgentLoop，不污染主对话历史
+    const subLoop = _runtimeRef.createSubAgentLoop(10);
     const result = await Promise.race([
-      agentLoop.run(systemPrompt, prompt),
+      subLoop.run(systemPrompt, prompt),
       timeout,
     ]);
 

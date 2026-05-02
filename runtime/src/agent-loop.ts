@@ -32,7 +32,7 @@ export class AgentLoop {
     this.runtime = runtime;
     this.llmProvider = llmProvider;
     this.config = {
-      maxTurns: config?.maxTurns ?? 20,
+      maxTurns: config?.maxTurns ?? 8,
       maxTokens: config?.maxTokens ?? 4096,
       temperature: config?.temperature ?? 0.1,
       tools: config?.tools ?? {},
@@ -90,6 +90,7 @@ export class AgentLoop {
     let turnsUsed = 0;
     let toolCallsCount = 0;
     let finalOutput = '';
+    let consecutiveToolTurns = 0;
 
     while (turnsUsed < this.config.maxTurns) {
       turnsUsed++;
@@ -108,16 +109,30 @@ export class AgentLoop {
         };
       }
 
-      if (response.content) {
-        this.messages.push({ role: 'assistant', content: response.content });
-        finalOutput = response.content;
-        break;
-      }
-
+      // 优先处理 tool_calls（LLM 可能同时返回 content + tool_calls）
       if (response.tool_calls && response.tool_calls.length > 0) {
+        // 只有 LLM 没产生 content 时才算"纯工具轮次"；有 content 说明 LLM 在正常交互
+        if (!response.content) {
+          consecutiveToolTurns++;
+        } else {
+          consecutiveToolTurns = 0; // 有文字回复时重置计数器
+        }
+
+        // 防护：连续 8 轮纯工具调用无回复 → 强制中断
+        if (consecutiveToolTurns >= 8) {
+          return {
+            success: false,
+            output: finalOutput,
+            toolCallsCount,
+            turnsUsed,
+            error: `Tool call loop detected: ${consecutiveToolTurns} consecutive turns without assistant response`,
+          };
+        }
+
         this.messages.push({
           role: 'assistant',
-          content: '',
+          content: response.content || '',
+          reasoning_content: response.reasoning_content,
           tool_calls: response.tool_calls,
         });
 
@@ -133,6 +148,19 @@ export class AgentLoop {
         }
 
         continue;
+      }
+
+      // 无 tool_calls → 重置连续计数器
+      consecutiveToolTurns = 0;
+
+      if (response.content) {
+        this.messages.push({
+          role: 'assistant',
+          content: response.content,
+          reasoning_content: response.reasoning_content,
+        });
+        finalOutput = response.content;
+        break;
       }
 
       // 无 content 且无 tool_calls → 特殊异常

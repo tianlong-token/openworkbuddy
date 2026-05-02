@@ -3,6 +3,7 @@ import { ToolSchema } from '../types';
 export interface LLMMessage {
   role: 'system' | 'user' | 'assistant' | 'tool';
   content: string;
+  reasoning_content?: string;
   tool_calls?: ToolCall[];
   tool_call_id?: string;
 }
@@ -18,6 +19,7 @@ export interface ToolCall {
 
 export interface LLMResponse {
   content: string | null;
+  reasoning_content?: string;
   tool_calls: ToolCall[];
 }
 
@@ -73,24 +75,35 @@ export class LLMProvider {
       model: this.config.model,
       messages: messages.map(m => {
         if (m.tool_calls) {
-          return {
+          const assistantMsg: any = {
             role: m.role,
             content: m.content || null,
+            reasoning_content: m.reasoning_content || '', // DeepSeek requires this field for tool-call turns
             tool_calls: m.tool_calls
           };
+          return assistantMsg;
         }
         if (m.tool_call_id) {
           return {
             role: m.role,
             content: m.content,
-            tool_call_id: m.tool_call_id
+            tool_call_id: m.tool_call_id,
           };
         }
-        return { role: m.role, content: m.content };
+        const msg: any = { role: m.role, content: m.content };
+        // DeepSeek thinking mode: forward reasoning_content from previous assistant messages
+        if (m.role === 'assistant' && m.reasoning_content) {
+          msg.reasoning_content = m.reasoning_content;
+        }
+        return msg;
       }),
       max_tokens: this.config.maxTokens || 4096,
       temperature: this.config.temperature || 0.1,
     };
+
+    // DeepSeek v4-flash always runs in thinking mode. We handle this by
+    // preserving reasoning_content in assistant messages and forwarding
+    // it on every follow-up request.
 
     const activeTools = tools || this.toolsSchema;
     if (Object.keys(activeTools).length > 0) {
@@ -104,7 +117,8 @@ export class LLMProvider {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${this.config.apiKey}`
       },
-      body: JSON.stringify(body)
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(60_000), // 60s per API call to prevent infinite hangs
     });
 
     if (!resp.ok) {
@@ -128,6 +142,7 @@ export class LLMProvider {
 
     return {
       content: msg.content,
+      reasoning_content: msg.reasoning_content,
       tool_calls: toolCalls
     };
   }

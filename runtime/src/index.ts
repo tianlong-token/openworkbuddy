@@ -145,6 +145,7 @@ export class WorkBuddyRuntime {
 
     try {
       const promise = this.agentLoop.run(systemPrompt, userMsg);
+      // DeepSeek thinking mode takes 15-30s per call; allow up to 120s for multi-turn.
       const timeoutMs = this.config.timeout || 120_000;
 
       const result: AgentLoopResult = await Promise.race([
@@ -172,17 +173,26 @@ export class WorkBuddyRuntime {
   }
 
   private buildSystemPrompt(skill: Skill): string {
-    // Start with the skill body as the system prompt
-    let prompt = skill.body;
-
-    // Append tool usage instructions
     const allowedTools = skill.frontmatter['allowed-tools']
-      ? skill.frontmatter['allowed-tools'].split(',').map(s => s.trim())
+      ? skill.frontmatter['allowed-tools'].split(',').map(s => s.trim() as ToolName)
       : this.config.allowedTools;
 
-    prompt += `\n\n## Available Tools\nYou have access to the following tools: ${allowedTools.join(', ')}.\nCall them when needed to complete the user's request.`;
+    // Build tool list with descriptions from the tool router
+    const toolDescriptions = allowedTools.map(name => {
+      const schema = this.toolRouter.getSchema(name);
+      return schema ? `- **${name}**: ${schema.description}` : `- ${name}`;
+    }).join('\n');
 
-    return prompt;
+    const prefix = `You are a work assistant. You exist to help people get their work done efficiently. You are skilled at using various tools and should use them proactively.
+
+Rules:
+1. Use tools to get things done — don't just describe what you could do.
+2. For complex tasks, think step by step.
+3. Keep responses clear and actionable.`;
+
+    const toolSection = `## Available Tools\n${toolDescriptions}\n\nCall these tools when needed. Do not ask for permission — just use them.`;
+
+    return `${prefix}\n\n## Instructions\n${skill.body}\n\n${toolSection}`;
   }
 
   getConfig(): RuntimeConfig {
@@ -191,6 +201,23 @@ export class WorkBuddyRuntime {
 
   getAgentLoop(): AgentLoop | null {
     return this.agentLoop;
+  }
+
+  getLLMProvider(): LLMProvider | null {
+    return this.llmProvider;
+  }
+
+  /** 创建独立的子 AgentLoop（用于 Agent/Task/Skill 子任务，不污染主对话） */
+  createSubAgentLoop(maxTurns: number = 10): AgentLoop {
+    if (!this.llmProvider) {
+      throw new Error('LLM provider not initialized');
+    }
+    return createAgentLoop(this, this.llmProvider, {
+      maxTurns,
+      maxTokens: this.config.llmMaxTokens || 4096,
+      temperature: this.config.llmTemperature ?? 0.1,
+      tools: TOOL_SCHEMAS,
+    });
   }
 
   getSessionManager(): SessionManager {

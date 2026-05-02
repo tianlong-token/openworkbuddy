@@ -1,3 +1,6 @@
+import readline from 'node:readline';
+import { readFileSync, existsSync, writeFileSync, mkdirSync } from 'node:fs';
+import { join } from 'node:path';
 import { WorkBuddyRuntime } from './index';
 import { loadConfig } from './config';
 
@@ -295,7 +298,6 @@ async function main() {
       if (sessionId) console.log(`  ${color.dim('Session:')} ${sessionId}`);
       console.log(`  ${color.dim('Type /exit to quit, /clear to clear history.')}\n`);
 
-      const readline = require('readline');
       const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
 
       const askQuestion = () => {
@@ -312,9 +314,11 @@ async function main() {
             return;
           }
 
+          silenceLogging();
           startLoading(color.dim(`Thinking...`));
           const output = await runtime.runSkill(skillName, input);
           stopLoading();
+          restoreLogging();
 
           console.log(`\n${color.cyan('Agent')}: ${output}\n`);
           askQuestion();
@@ -417,8 +421,6 @@ async function main() {
       }
 
       // ===== 读取 todos（复用 tool-executors 的逻辑） =====
-      const { readFileSync, existsSync, writeFileSync, mkdirSync } = require('fs');
-      const { join } = require('path');
       const todoFilePath = join(process.cwd(), '.workbuddy/todos/todos.json');
 
       function loadTodos(): Array<{ id: string; content: string; status: string; priority?: string }> {
@@ -629,6 +631,37 @@ async function main() {
       break;
     }
 
+    case 'tui': {
+      const skillName = cmdArgs[0];
+      if (!skillName) {
+        console.error('Usage: workbuddy tui <skill-name>');
+        process.exit(1);
+      }
+
+      // Suppress runtime initialization logs to avoid Ink conflicts
+      const originalLog = console.log;
+      console.log = () => {};
+
+      const runtime = new WorkBuddyRuntime(timeout ? { timeout } : undefined);
+      await runtime.initialize();
+      console.log = originalLog;
+
+      const skill = runtime.getSkill(skillName);
+      if (!skill) {
+        console.error(`${color.red('✗')} Skill '${skillName}' not found`);
+        process.exit(1);
+      }
+
+      try {
+        const { runTUI } = await import('./tui/index.js');
+        await runTUI({ runtime, skillName });
+      } catch (e: any) {
+        console.error(`${color.red('✗')} TUI error: ${e.message}`);
+        process.exit(1);
+      }
+      break;
+    }
+
     default: {
       console.log(`
 ${color.bold('WorkBuddy')} - Open-source AI Assistant Framework
@@ -641,6 +674,7 @@ ${color.yellow('Usage:')}
   workbuddy [--json] info <skill-name>                     Show skill details
   workbuddy [--json] config                                Show configuration
   workbuddy [--json] sessions                               List active sessions
+  workbuddy tui <skill-name>                               Start TUI chat interface
   workbuddy todos list [--status=x] [--priority=x]          List todos
   workbuddy todos add <msg> [--priority=x]                  Add a todo
   workbuddy todos complete <idx> [<idx> ...]                Mark todos complete

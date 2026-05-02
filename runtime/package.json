@@ -8,13 +8,15 @@
     "workbuddy": "dist/cli.js"
   },
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && tsc -p tsconfig.tui.json && node -e \"require('fs').copyFileSync('src/tui/package.json','dist/tui/package.json')\"",
     "dev": "tsx src/index.ts",
     "test": "vitest"
   },
   "dependencies": {
     "cheerio": "^1.2.0",
     "glob": "^10.4.5",
+    "ink": "^4.4.1",
+    "react": "^18.2.0",
     "yaml": "^2.4.0",
     "zod": "^3.23.0"
   },
