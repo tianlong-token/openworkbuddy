@@ -1,0 +1,16 @@
+{
+  "name": "@workbuddy/proxy-box",
+  "version": "0.1.0-placeholder",
+  "description": "Sandbox proxy service for WorkBuddy — placeholder for future integration",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "echo 'Proxy-box is a placeholder. See PROXY-BOX-DECISION.md for details.'",
+    "dev": "npm run start",
+    "test": "npx tsx extra/test/*.spec.ts"
+  },
+  "dependencies": {
+    "express": "^4.18.0",
+    "ws": "^8.16.0",
+    "@modelcontextprotocol/sdk": "^1.0.0"
+  }
+}

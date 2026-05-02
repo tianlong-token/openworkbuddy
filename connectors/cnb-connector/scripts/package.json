@@ -1,0 +1,26 @@
+{
+  "name": "cnb-skill",
+  "version": "1.0.0",
+  "description": "腾讯CNB代码平台集成工具 - 安全、智能、可扩展",
+  "main": "cnb.js",
+  "type": "module",
+  "bin": {
+    "cnb": "cnb.js"
+  },
+  "scripts": {
+    "test": "node test.js"
+  },
+  "keywords": [
+    "cnb",
+    "tencent",
+    "git",
+    "issues",
+    "pull-requests"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "axios": "^1.6.0",
+    "xlsx": "^0.18.5"
+  }
+}

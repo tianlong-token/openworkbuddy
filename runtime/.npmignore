@@ -1,0 +1,33 @@
+# Development files
+.planning/
+*.spec.ts
+*.test.ts
+coverage/
+
+# Dependencies
+node_modules/
+
+# Build artifacts (keep source maps for debugging)
+dist/**/*.map
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+
+# Environment
+.env
+.env.local
+
+# Temporary files
+*.tmp
+*.temp

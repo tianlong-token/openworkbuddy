@@ -1,0 +1,1 @@
+{"version":3,"file":"index.d.ts","sourceRoot":"","sources":["../../src/mcp/index.ts"],"names":[],"mappings":"AAAA;;;;;GAKG;AAEH,OAAO,EAAE,kBAAkB,EAAE,IAAI,EAAE,MAAM,yBAAyB,CAAC;AACnE,YAAY,EACR,mBAAmB,EACnB,kBAAkB,EAClB,oBAAoB,EACpB,cAAc,EACd,UAAU,EACV,WAAW,GACd,MAAM,yBAAyB,CAAC;AAEjC,OAAO,EAAE,yBAAyB,EAAE,MAAM,gCAAgC,CAAC;AAC3E,YAAY,EAAE,sBAAsB,EAAE,MAAM,gCAAgC,CAAC"}

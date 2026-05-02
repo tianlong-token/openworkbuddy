@@ -1,0 +1,31 @@
+{
+  "name": "workbuddy",
+  "version": "0.1.0",
+  "description": "Open-source AI assistant framework with 149+ skills, multi-agent orchestration, and a pluggable runtime engine",
+  "description_zh": "开源 AI 助手框架，内置 149+ 技能、多智能体编排、可插拔运行时引擎",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/your-org/workbuddy"
+  },
+  "workspaces": [
+    "runtime",
+    "proxy-box",
+    "scripts"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present",
+    "workbuddy": "node runtime/dist/index.js",
+    "validate-skills": "tsx scripts/validate-skill-spec.ts",
+    "generate-index": "tsx scripts/generate-skill-index.ts"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.0",
+    "tsx": "^4.7.0"
+  }
+}
