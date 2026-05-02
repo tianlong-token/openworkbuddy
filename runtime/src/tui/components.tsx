@@ -201,14 +201,41 @@ function MessageBubble({ message }: { message: ChatMessage }) {
 
 // ─── Message lines estimation ─────────────────────────────────
 
+/** Estimate the display width of a string, accounting for CJK and ANSI codes */
+function estimateDisplayWidth(text: string): number {
+  // Strip ANSI escape codes
+  const stripped = text.replace(/\x1b\[[0-9;]*m/g, '');
+  let width = 0;
+  for (const char of stripped) {
+    const code = char.codePointAt(0) || 0;
+    // CJK Unified Ideographs, CJK Extensions, Hangul, Kana, Full-width
+    if (
+      (code >= 0x1100 && code <= 0x115F) ||
+      (code >= 0x2E80 && code <= 0x9FFF) ||
+      (code >= 0xAC00 && code <= 0xD7AF) ||
+      (code >= 0xF900 && code <= 0xFAFF) ||
+      (code >= 0xFF01 && code <= 0xFF60) ||
+      (code >= 0xFFE0 && code <= 0xFFE6) ||
+      (code >= 0x1F300 && code <= 0x1F9FF) ||
+      (code >= 0x20000 && code <= 0x2FA1F)
+    ) {
+      width += 2;
+    } else {
+      width += 1;
+    }
+  }
+  return width;
+}
+
 function estimateMessageLines(msg: ChatMessage, terminalWidth: number): number {
   // Fixed: role title line ("You • 14:30:00") + spacing = 2
   let lines = 2;
 
-  // Message content wraps according to terminal width
-  const maxContentWidth = terminalWidth - 4;  // subtract margins
+  // Message content wraps according to terminal width (using display width for CJK)
+  const maxContentWidth = terminalWidth - 4;
   for (const paragraph of msg.content.split('\n')) {
-    lines += Math.max(1, Math.ceil(paragraph.length / maxContentWidth));
+    const displayWidth = estimateDisplayWidth(paragraph);
+    lines += Math.max(1, Math.ceil(displayWidth / maxContentWidth));
   }
 
   return lines;

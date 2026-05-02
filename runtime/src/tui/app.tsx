@@ -9,13 +9,32 @@ const SPINNER_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', 
 export function App({ runtime, skillName }: { runtime: any; skillName: string }) {
   const { exit } = useApp();
   const { stdout } = useStdout();
-  const columns = stdout.columns || 80;
-  const rows = stdout.rows || 24;
+  const [terminalSize, setTerminalSize] = useState({
+    columns: stdout.columns || 80,
+    rows: stdout.rows || 24,
+  });
+
+  // Listen for terminal resize
+  useEffect(() => {
+    const onResize = () => {
+      setTerminalSize({
+        columns: stdout.columns || 80,
+        rows: stdout.rows || 24,
+      });
+    };
+    stdout.on('resize', onResize);
+    return () => { stdout.off('resize', onResize); };
+  }, [stdout]);
+
+  const { columns, rows } = terminalSize;
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [cursorPos, setCursorPos] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
   const [thinkingText, setThinkingText] = useState('');
+  const isLoadingRef = useRef(isLoading);
+  isLoadingRef.current = isLoading;
+
   // Input history state
   const [history, setHistory] = useState<string[]>([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
@@ -107,8 +126,7 @@ export function App({ runtime, skillName }: { runtime: any; skillName: string })
 
       if (trimmed.startsWith('/')) {
         handleCommand(trimmed);
-      } else if (!isLoading) {
-        // Save to history before sending
+      } else if (!isLoadingRef.current) {
         setHistory(prev => [...prev, trimmed]);
         setHistoryIndex(-1);
         sendMessage(trimmed);
@@ -125,7 +143,7 @@ export function App({ runtime, skillName }: { runtime: any; skillName: string })
     const pageSize = Math.max(1, Math.floor(availableHeight / 2));
 
     if (key.pageUp) {
-      setScrollOffset(prev => Math.min(prev + pageSize, messages.length - 1));
+      setScrollOffset(prev => Math.min(prev + pageSize, Math.max(0, messages.length - 1)));
       setAutoScroll(false);
       return;
     }
@@ -146,7 +164,7 @@ export function App({ runtime, skillName }: { runtime: any; skillName: string })
       return;
     }
 
-    if (isLoading) return;
+    if (isLoadingRef.current) return;
 
     // Ctrl+A: go to start of line (home)
     if (key.ctrl && char === 'a') {
@@ -188,8 +206,20 @@ export function App({ runtime, skillName }: { runtime: any; skillName: string })
       return;
     }
 
-    // Backspace
-    if (key.backspace || key.delete) {
+    // Delete (forward) - explicit forward delete key, separate from backspace
+    if (key.forwardDelete) {
+      const current = inputRef.current;
+      const pos = cursorRef.current;
+      if (pos < current.length) {
+        const newVal = current.slice(0, pos) + current.slice(pos + 1);
+        setInput(newVal);
+        inputRef.current = newVal;
+      }
+      return;
+    }
+
+    // Backspace - only backspace, never forward delete
+    if (key.backspace) {
       const pos = cursorRef.current;
       if (pos > 0) {
         const current = inputRef.current;
@@ -203,8 +233,19 @@ export function App({ runtime, skillName }: { runtime: any; skillName: string })
     }
 
     // Arrow keys
+    if (key.leftArrow) {
+      const newPos = Math.max(0, cursorRef.current - 1);
+      setCursorPos(newPos);
+      cursorRef.current = newPos;
+      return;
+    }
+    if (key.rightArrow) {
+      const newPos = Math.min(inputRef.current.length, cursorRef.current + 1);
+      setCursorPos(newPos);
+      cursorRef.current = newPos;
+      return;
+    }
     if (key.upArrow) {
-      // Browse input history backward
       if (history.length > 0) {
         const newIndex = historyIndex < history.length - 1 ? historyIndex + 1 : historyIndex;
         setHistoryIndex(newIndex);
@@ -217,7 +258,6 @@ export function App({ runtime, skillName }: { runtime: any; skillName: string })
       return;
     }
     if (key.downArrow) {
-      // Browse input history forward
       if (historyIndex > 0) {
         const newIndex = historyIndex - 1;
         setHistoryIndex(newIndex);
@@ -246,7 +286,7 @@ export function App({ runtime, skillName }: { runtime: any; skillName: string })
       inputRef.current = newVal;
       cursorRef.current = pos + 1;
     }
-  });
+  }, { isActive: true });
 
   const skill = skillRef.current;
   const skillName_ = skill?.frontmatter?.name || skillName || 'unknown';
@@ -288,17 +328,19 @@ export function App({ runtime, skillName }: { runtime: any; skillName: string })
         <Box marginRight={1}>
           <Text bold color="green">λ</Text>
         </Box>
-        <Box flexGrow={1}>
+        <Box flexGrow={1} key={`input-${input.length}-${cursorPos}`}>
           {input.length === 0 && !isLoading ? (
             <Text dimColor>Type a message...</Text>
+          ) : isLoading ? (
+            <Text dimColor>Processing...</Text>
           ) : (
-            <>
-              <Text>{input.slice(0, cursorPos)}</Text>
+            <Text>
+              {input.slice(0, cursorPos)}
               <Text inverse backgroundColor="white" color="black">
                 {input[cursorPos] || ' '}
               </Text>
-              <Text>{input.slice(cursorPos + 1)}</Text>
-            </>
+              {input.slice(cursorPos + 1)}
+            </Text>
           )}
         </Box>
       </Box>
