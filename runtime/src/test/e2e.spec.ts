@@ -217,9 +217,9 @@ describe('E2E Integration Tests', () => {
         prompt: 'Write a one-line greeting message.',
       });
 
-      // Task tool is routed correctly — may fail if LLM has no balance
-      expect(result.error).not.toContain('not allowed');
-      expect(result.error).not.toContain('No executor registered');
+      // Task tool is routed correctly — now with API balance, it should succeed
+      expect(result.error).toBeFalsy()
+      expect(result.output.length).toBeGreaterThan(0);
     });
 
     it('should execute DAG tasks via Task tool', async () => {

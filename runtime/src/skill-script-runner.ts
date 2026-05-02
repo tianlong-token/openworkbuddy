@@ -1,5 +1,5 @@
 import { Skill, ToolResult } from './types';
-import { existsSync } from 'fs';
+import { existsSync, readdirSync } from 'fs';
 import { join, extname } from 'path';
 import { spawn } from 'child_process';
 
@@ -30,7 +30,6 @@ export class DefaultSkillScriptRunner implements SkillScriptRunner {
       return [];
     }
 
-    const { readdirSync } = require('fs');
     const files: string[] = readdirSync(scriptsDir).filter((f: string) => {
       const ext = extname(f).toLowerCase();
       return ['.js', '.ts', '.sh', '.bat', '.cmd'].includes(ext);

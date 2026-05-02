@@ -128,7 +128,7 @@ describe('Tool Executors', () => {
     });
 
     it('should execute basic command', async () => {
-      const result = await bashExecutor({ command: 'echo "Hello from Bash"' });
+      const result = await bashExecutor({ command: 'node -e "console.log(\'Hello from Bash\')"' });
       expect(result.success).toBe(true);
       expect(result.output).toContain('Hello from Bash');
     });

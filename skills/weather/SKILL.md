@@ -10,22 +10,23 @@ allowed-tools: Read, Bash, WebFetch
 
 # Weather
 
-Two free services, no API keys needed.
+Get current weather and forecasts using free services (no API key required).
+
+**IMPORTANT**: After fetching weather data, present the result to the user. Do NOT call additional tools once you have the data — just show the weather information directly.
 
 ## wttr.in (primary)
 
-```bash
-curl -s "wttr.in/London?format=3"
-curl -s "wttr.in/London?format=%l:+%c+%t+%h+%w"
-curl -s "wttr.in/London?T"
-```
+Fetch via WebFetch or Bash:
+- `https://wttr.in/London?format=3` — short text output
+- `https://wttr.in/London?format=%l:+%c+%t+%h+%w` — custom format
+- `https://wttr.in/London?T` — with local time
 
 Format codes: `%c` condition, `%t` temp, `%h` humidity, `%w` wind, `%l` location
 
 Tips:
-- URL-encode spaces: `wttr.in/New+York`
+- Use `+` for spaces: `wttr.in/New+York`
 - Airport codes: `wttr.in/JFK`
-- Units: `?m` (metric) `?u` (USCS)
+- Metric: `?m` | USCS: `?u`
 - Today only: `?1`, Current only: `?0`
 
 ## Open-Meteo (fallback, JSON)
@@ -33,3 +34,9 @@ Tips:
 ```bash
 curl -s "https://api.open-meteo.com/v1/forecast?latitude=51.5&longitude=-0.12&current_weather=true"
 ```
+
+## Workflow
+
+1. Identify the city from the user's request.
+2. Fetch weather using **one** method (WebFetch or Bash — pick just one).
+3. **Present the result to the user directly.** Do not call additional tools after receiving weather data.
