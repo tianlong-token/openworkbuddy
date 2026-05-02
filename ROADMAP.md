@@ -3,7 +3,7 @@
 > 项目路径：`C:/Users/every/Desktop/workbuddy开源复刻版`
 > 构建命令：`npm run build`（必须在项目根目录执行）
 > 测试命令：`cd runtime && npx vitest run --sequence.concurrent=false`
-> 当前版本：**v0.2.0-alpha** | 测试：**89/89 passing**
+> 当前版本：**v0.2.0-beta** | 测试：**95/95 passing**
 
 ---
 
@@ -51,15 +51,9 @@ Agent Loop 自动写入对话记录到 MemoryStore。
 
 ## P1 — 待完成（v0.2.0-beta）
 
-### P1-4：实现 Task 工具
+### ~~P1-4：实现 Task 工具~~ ✅ 已完成
 
-**目标**：补全最后一个占位符工具，支持任务分解 + DAG 执行。
-
-**涉及文件**：`runtime/src/tool-executors.ts`（Task executor）、`runtime/src/types.ts`
-
-**预计时间**：15-20h
-
----
+单步委派 + DAG 编排模式均已实现。测试：95/95 passing（v0.2.0-beta）。
 
 ### P1-5：TodoWrite CLI
 

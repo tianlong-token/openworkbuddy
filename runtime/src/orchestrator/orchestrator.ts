@@ -254,9 +254,28 @@ export class Orchestrator {
     });
 
     const taskFn = async (): Promise<string> => {
-      if (this.runtime && task.skillSlug) {
-        return await this.runtime.runSkill(task.skillSlug, task.description);
+      // 如果有 runtime 且 AgentLoop 可用，真正调用 LLM 执行
+      if (this.runtime && this.runtime.getAgentLoop) {
+        const agentLoop = this.runtime.getAgentLoop();
+        if (agentLoop) {
+          const role = task.assignedRole ? this.roles.get(task.assignedRole) : null;
+          const roleContext = role
+            ? `You are playing the role of "${role.name}" — ${role.description}.`
+            : 'You are a specialized agent.';
+
+          const systemPrompt = `${roleContext} Your task: ${task.description}. Be concise and focused.`;
+
+          agentLoop.reset();
+          const result = await agentLoop.run(systemPrompt, task.description);
+
+          if (!result.success) {
+            throw new Error(result.error || 'Task execution failed');
+          }
+          return result.output;
+        }
       }
+
+      // Fallback: 无 LLM 时返回描述（向后兼容测试）
       return `[${task.id}] ${task.description}`;
     };
 

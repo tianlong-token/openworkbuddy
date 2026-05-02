@@ -465,6 +465,105 @@ export const todoWriteExecutor: ToolExecutor = async (args: Record<string, unkno
   };
 };
 
+// ===== Task Tool (Single Dispatch + DAG Orchestration) =====
+import { TaskNode } from './types';
+import { createOrchestrator } from './orchestrator/orchestrator';
+
+async function executeTaskDag(
+  taskGraph: TaskNode[],
+  timeoutMs: number
+): Promise<ToolResult> {
+  const orch = createOrchestrator({
+    mode: 'dag',
+    maxConcurrency: 4,
+    timeoutMs: Math.min(timeoutMs, 120_000),
+    retryCount: 0,
+  }, _runtimeRef);
+
+  orch.addTasks(taskGraph);
+  const results = await orch.execute();
+
+  const lines: string[] = [];
+  let allSuccess = true;
+
+  for (const [taskId, result] of results) {
+    const statusIcon = result.status === 'completed' ? '[OK]' : '[FAIL]';
+    lines.push(`${statusIcon} [${taskId}] ${result.status} (${result.duration}ms)`);
+    if (result.status === 'failed') {
+      allSuccess = false;
+      lines.push(`   Error: ${result.error}`);
+    }
+    lines.push(`   Output: ${result.output.substring(0, 200)}`);
+    lines.push('---');
+  }
+
+  const summary = lines.join('\n');
+  const completedCount = [...results.values()].filter(r => r.status === 'completed').length;
+
+  return {
+    success: allSuccess,
+    output: `Task DAG completed: ${completedCount}/${results.size} tasks succeeded\n\n${summary}`,
+  };
+}
+
+export const taskExecutor: ToolExecutor = async (args: Record<string, unknown>): Promise<ToolResult> => {
+  const description = args['description'] as string;
+  const prompt = args['prompt'] as string;
+  const subagentType = (args['subagentType'] as string) || 'general';
+  const timeoutMs = (args['timeout'] as number) || 60_000;
+  const taskGraph = args['taskGraph'] as TaskNode[] | undefined;
+
+  if (!description) return { success: false, output: '', error: 'Missing description' };
+  if (!prompt) return { success: false, output: '', error: 'Missing prompt' };
+
+  if (taskGraph && taskGraph.length > 0) {
+    return executeTaskDag(taskGraph, timeoutMs);
+  }
+
+  if (!_runtimeRef || !_runtimeRef.getAgentLoop) {
+    return { success: false, output: '', error: 'Task tool requires LLM configuration.' };
+  }
+
+  const agentLoop = _runtimeRef.getAgentLoop();
+  if (!agentLoop) {
+    return { success: false, output: '', error: 'Task tool requires LLM configuration.' };
+  }
+
+  const systemPrompt = `You are a specialized ${subagentType} sub-agent. Your task is: ${description}. Follow the instructions below carefully.`;
+
+  const timeout = new Promise<never>((_, reject) => {
+    setTimeout(() => reject(new Error(`Task timed out after ${timeoutMs}ms`)), timeoutMs);
+  });
+
+  try {
+    const result = await Promise.race([
+      agentLoop.run(systemPrompt, prompt),
+      timeout,
+    ]);
+
+    return {
+      success: result.success,
+      output: result.output,
+      error: result.error,
+    };
+  } catch (e: any) {
+    return { success: false, output: '', error: `Task execution failed: ${e.message}` };
+  }
+};
+
+// ===== Export for testing =====
+export function getRuntimeRef(): any {
+  return _runtimeRef;
+}
+
+export function clearRuntimeRef(): void {
+  _runtimeRef = null;
+}
+
+export function restoreRuntimeRef(ref: any): void {
+  _runtimeRef = ref;
+}
+
 // ===== Registration Helper =====
 import { ToolRouter as ToolRouterClass } from './tool-router';
 
@@ -480,4 +579,5 @@ export function registerAllTools(router: ToolRouterClass): void {
   router.register('Agent', agentExecutor);
   router.register('Skill', skillExecutor);
   router.register('TodoWrite', todoWriteExecutor);
+  router.register('Task', taskExecutor);
 }

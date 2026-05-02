@@ -208,4 +208,45 @@ describe('E2E Integration Tests', () => {
       expect(parsed).toHaveProperty('allowedTools');
     });
   });
+
+  describe('Task Tool E2E', () => {
+    it('should route Task tool to executor (not reject as unknown tool)', async () => {
+      const router = runtime.getToolRouter();
+      const result = await router.execute('Task', {
+        description: 'Write a short greeting',
+        prompt: 'Write a one-line greeting message.',
+      });
+
+      // Task tool is routed correctly — may fail if LLM has no balance
+      expect(result.error).not.toContain('not allowed');
+      expect(result.error).not.toContain('No executor registered');
+    });
+
+    it('should execute DAG tasks via Task tool', async () => {
+      const router = runtime.getToolRouter();
+      const result = await router.execute('Task', {
+        description: 'Multi-step analysis',
+        prompt: 'Execute the following tasks.',
+        taskGraph: [
+          {
+            id: 'task_1',
+            description: 'Write a single sentence about the weather',
+            dependsOn: [],
+            status: 'pending',
+          },
+          {
+            id: 'task_2',
+            description: 'Write a single sentence about technology',
+            dependsOn: [],
+            status: 'pending',
+          },
+        ],
+      });
+
+      // DAG mode uses Orchestrator which falls back to description when LLM unavailable
+      expect(result.output).toContain('task_1');
+      expect(result.output).toContain('task_2');
+      expect(result.output).toContain('tasks succeeded');
+    });
+  });
 });

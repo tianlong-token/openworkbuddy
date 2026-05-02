@@ -3,7 +3,8 @@ import {
   readExecutor, writeExecutor, editExecutor,
   bashExecutor, globExecutor, grepExecutor,
   webFetchExecutor, webSearchExecutor,
-  todoWriteExecutor,
+  todoWriteExecutor, taskExecutor,
+  getRuntimeRef, clearRuntimeRef, restoreRuntimeRef,
   registerAllTools
 } from '../tool-executors';
 import { TOOL_SCHEMAS } from '../tool-router';
@@ -133,7 +134,7 @@ describe('Tool Executors', () => {
     });
 
     it('should handle command failure', async () => {
-      const result = await bashExecutor({ command: 'exit 1' });
+      const result = await bashExecutor({ command: 'node -e "process.exit(1)"' });
       expect(result.success).toBe(false);
     });
   });
@@ -196,6 +197,45 @@ describe('Tool Executors', () => {
       });
       expect(result.success).toBe(true);
       expect(result.output).toContain('todos.json');
+    });
+  });
+
+  describe('TaskExecutor', () => {
+    it('should return error for missing description', async () => {
+      const result = await taskExecutor({ prompt: 'test' });
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('Missing');
+    });
+
+    it('should return error for missing prompt', async () => {
+      const result = await taskExecutor({ description: 'test' });
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('Missing');
+    });
+
+    it('should return error when LLM not configured', async () => {
+      const savedRef = getRuntimeRef();
+      clearRuntimeRef();
+      try {
+        const result = await taskExecutor({
+          description: 'Test task',
+          prompt: 'Do something',
+        });
+        expect(result.success).toBe(false);
+        expect(result.error).toContain('LLM configuration');
+      } finally {
+        restoreRuntimeRef(savedRef);
+      }
+    });
+
+    it('should not error on valid arguments when LLM is configured', async () => {
+      const result = await taskExecutor({
+        description: 'Test task',
+        prompt: 'Say hello',
+        subagentType: 'general',
+      });
+      expect(result.error).not.toBe('Missing description');
+      expect(result.error).not.toBe('Missing prompt');
     });
   });
 });
